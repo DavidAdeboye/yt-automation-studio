@@ -17,7 +17,8 @@ import requests
 
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "").strip()
+_SELECTED_GROQ_MODEL = None
 
 
 def _groq_error(response):
@@ -28,12 +29,51 @@ def _groq_error(response):
     return detail or f"HTTP {response.status_code}"
 
 
+def _select_groq_model() -> str:
+    """Select an available chat model, while allowing an explicit override."""
+    global _SELECTED_GROQ_MODEL
+    if GROQ_MODEL:
+        return GROQ_MODEL
+    if _SELECTED_GROQ_MODEL:
+        return _SELECTED_GROQ_MODEL
+
+    response = requests.get(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(f"Groq model lookup failed ({response.status_code}): {_groq_error(response)}")
+    model_ids = [item["id"] for item in response.json().get("data", [])]
+    excluded = ("whisper", "guard", "tts", "speech", "audio", "moderation")
+    chat_models = [
+        model_id for model_id in model_ids
+        if not any(word in model_id.lower() for word in excluded)
+    ]
+    preferred = (
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+    )
+    _SELECTED_GROQ_MODEL = next(
+        (model_id for model_id in preferred if model_id in chat_models),
+        chat_models[0] if chat_models else None,
+    )
+    if not _SELECTED_GROQ_MODEL:
+        raise RuntimeError(
+            "Your Groq account has no available chat model. Add GROQ_MODEL in app secrets "
+            "after choosing a model listed in the Groq console."
+        )
+    return _SELECTED_GROQ_MODEL
+
+
 # ---------- LLM scripting ----------
 
 def call_llm(prompt: str, model: str = None) -> str:
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is not configured in the app secrets.")
-    model = model or GROQ_MODEL
+    model = model or _select_groq_model()
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
