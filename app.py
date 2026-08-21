@@ -174,7 +174,8 @@ def pipeline_clipping(stream_url: str, num_clips: int, clip_duration: int,
         end = start + clip_duration
         raw_template = os.path.join(wd, f"clip_{i}_source.%(ext)s")
         run_command([
-            "yt-dlp", "--no-playlist", "--no-progress",
+            "yt-dlp", "--no-playlist", "--no-progress", "--force-ipv4",
+            "--retries", "3", "--fragment-retries", "3",
             "--download-sections", f"*{start:.3f}-{end:.3f}", "--force-keyframes-at-cuts",
             "-f", "bv*[height<=720]+ba/b[height<=720]/b",
             "--merge-output-format", "mp4", "-o", raw_template, stream_url,
