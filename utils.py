@@ -32,6 +32,26 @@ def _groq_error(response):
     return detail or f"HTTP {response.status_code}"
 
 
+def _chat_content(response, provider: str) -> str:
+    """Extract OpenAI-compatible chat content with actionable diagnostics."""
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        content_type = response.headers.get("Content-Type", "unknown")
+        preview = response.text.strip()[:500] or "<empty response>"
+        raise RuntimeError(
+            f"{provider} returned a non-JSON response (HTTP {response.status_code}, "
+            f"Content-Type: {content_type}): {preview}"
+        ) from exc
+    try:
+        content = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"{provider} returned an unexpected response: {str(payload)[:500]}") from exc
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError(f"{provider} returned an empty message.")
+    return content.strip()
+
+
 def _select_groq_model() -> str:
     """Select an available chat model, while allowing an explicit override."""
     global _SELECTED_GROQ_MODEL
@@ -84,7 +104,7 @@ def call_llm(prompt: str, model: str = None) -> str:
         )
         if not response.ok:
             raise RuntimeError(f"AgentRouter request failed ({response.status_code}): {_groq_error(response)}")
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return _chat_content(response, "AgentRouter")
     if not GROQ_API_KEY:
         raise RuntimeError("Add AGENTROUTER_API_KEY or GROQ_API_KEY to the app secrets.")
     model = model or _select_groq_model()
@@ -95,7 +115,7 @@ def call_llm(prompt: str, model: str = None) -> str:
     )
     if not response.ok:
         raise RuntimeError(f"Groq chat request failed ({response.status_code}): {_groq_error(response)}")
-    return response.json()["choices"][0]["message"]["content"].strip()
+    return _chat_content(response, "Groq")
 
 
 # ---------- Narration ----------
