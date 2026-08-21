@@ -18,6 +18,8 @@ Create a Docker Space and upload this repository. In the Space settings, add thi
 
 - `GROQ_API_KEY`: a Groq API key used for highlight selection and clip transcription.
 
+Alternatively, use AgentRouter for highlight selection by adding `OPENAI_API_KEY` (your AgentRouter key) and optionally `OPENAI_MODEL` such as `gpt-5.6`. AgentRouter's OpenAI-compatible base URL is `https://agentrouter.org/v1`.
+
 The Space runs one video job at a time. Generated files live in temporary storage and may disappear whenever the Space restarts.
 
 ## Current clipping limits

@@ -127,7 +127,9 @@ def find_transcript_highlights(stream_url: str, num_clips: int, wd: str) -> list
         raise RuntimeError("Captions were found but could not be read. Use Manual timestamps.")
 
     # Bound prompt size while retaining coverage across a long VOD.
-    max_chars = 90000
+    # Groq's free tier has a small tokens-per-minute limit. Keep the prompt
+    # around 6k tokens so the model can still return the requested JSON.
+    max_chars = 22000
     if len(transcript) > max_chars:
         lines = transcript.splitlines()
         stride = max(1, len(transcript) // max_chars + 1)

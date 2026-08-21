@@ -16,6 +16,9 @@ import urllib.parse
 import requests
 
 
+AGENTROUTER_API_KEY = os.environ.get("AGENTROUTER_API_KEY", os.environ.get("OPENAI_API_KEY", "")).strip()
+AGENTROUTER_BASE_URL = os.environ.get("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
+AGENTROUTER_MODEL = os.environ.get("AGENTROUTER_MODEL", os.environ.get("OPENAI_MODEL", "gpt-5.6")).strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "").strip()
 _SELECTED_GROQ_MODEL = None
@@ -51,10 +54,10 @@ def _select_groq_model() -> str:
         if not any(word in model_id.lower() for word in excluded)
     ]
     preferred = (
-        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
-        "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
     )
     _SELECTED_GROQ_MODEL = next(
         (model_id for model_id in preferred if model_id in chat_models),
@@ -71,8 +74,19 @@ def _select_groq_model() -> str:
 # ---------- LLM scripting ----------
 
 def call_llm(prompt: str, model: str = None) -> str:
+    if AGENTROUTER_API_KEY:
+        chosen_model = model or AGENTROUTER_MODEL
+        response = requests.post(
+            f"{AGENTROUTER_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {AGENTROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={"model": chosen_model, "messages": [{"role": "user", "content": prompt}]},
+            timeout=120,
+        )
+        if not response.ok:
+            raise RuntimeError(f"AgentRouter request failed ({response.status_code}): {_groq_error(response)}")
+        return response.json()["choices"][0]["message"]["content"].strip()
     if not GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured in the app secrets.")
+        raise RuntimeError("Add AGENTROUTER_API_KEY or GROQ_API_KEY to the app secrets.")
     model = model or _select_groq_model()
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
