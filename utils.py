@@ -16,18 +16,31 @@ import urllib.parse
 import requests
 
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+
+def _groq_error(response):
+    try:
+        detail = response.json().get("error", {}).get("message")
+    except ValueError:
+        detail = response.text.strip()
+    return detail or f"HTTP {response.status_code}"
 
 
 # ---------- LLM scripting ----------
 
-def call_llm(prompt: str, model: str = "llama-3.3-70b-versatile") -> str:
+def call_llm(prompt: str, model: str = None) -> str:
+    if not GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured in the app secrets.")
+    model = model or GROQ_MODEL
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
         json={"model": model, "messages": [{"role": "user", "content": prompt}]},
     )
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(f"Groq chat request failed ({response.status_code}): {_groq_error(response)}")
     return response.json()["choices"][0]["message"]["content"].strip()
 
 
@@ -57,6 +70,8 @@ def get_audio_duration(audio_path: str) -> float:
 
 def transcribe_audio(audio_or_video_path: str) -> str:
     """Returns an SRT-formatted transcript using Groq's hosted whisper-large-v3."""
+    if not GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured in the app secrets.")
     with open(audio_or_video_path, "rb") as f:
         response = requests.post(
             "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -64,7 +79,8 @@ def transcribe_audio(audio_or_video_path: str) -> str:
             files={"file": f},
             data={"model": "whisper-large-v3", "response_format": "srt"},
         )
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(f"Groq transcription failed ({response.status_code}): {_groq_error(response)}")
     return response.text
 
 
