@@ -141,10 +141,17 @@ def find_transcript_highlights(stream_url: str, num_clips: int, wd: str) -> list
         "and a short reason, like [{'{'}\"start\": 123.0, \"reason\": \"...\"{'}'}]. "
         "Place start 5 seconds before the key line when possible.\n\n" + transcript
     )
-    match = re.search(r"\[.*\]", raw, re.DOTALL)
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE | re.DOTALL).strip()
+    match = re.search(r"\[.*\]", cleaned, re.DOTALL)
     if not match:
-        raise RuntimeError("Highlight selection returned an invalid response.")
-    highlights = json.loads(match.group(0))
+        raise RuntimeError(f"Highlight selection returned no JSON array. Model said: {raw[:500]}")
+    try:
+        highlights = json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"Highlight selection returned invalid JSON ({exc}). Model said: {raw[:500]}"
+        ) from exc
     clean = []
     for item in highlights[:num_clips]:
         start = max(0.0, float(item["start"]))
