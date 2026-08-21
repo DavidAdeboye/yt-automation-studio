@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.git/
+.env
+env.txt
+get-pip.py
+Packages.txt
+Requirements.txt
