@@ -103,8 +103,14 @@ def call_llm(prompt: str, model: str = None) -> str:
             timeout=120,
         )
         if not response.ok:
-            raise RuntimeError(f"AgentRouter request failed ({response.status_code}): {_groq_error(response)}")
-        return _chat_content(response, "AgentRouter")
+            if not GROQ_API_KEY:
+                raise RuntimeError(f"AgentRouter request failed ({response.status_code}): {_groq_error(response)}")
+        else:
+            try:
+                return _chat_content(response, "AgentRouter")
+            except RuntimeError:
+                if not GROQ_API_KEY:
+                    raise
     if not GROQ_API_KEY:
         raise RuntimeError("Add AGENTROUTER_API_KEY or GROQ_API_KEY to the app secrets.")
     model = model or _select_groq_model()
